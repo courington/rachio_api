@@ -2,13 +2,19 @@
 @import "_utils";
 @import "_colors";
 
+html, body {
+	> * {
+		box-sizing: border-box;
+	}
+}
+
 // Mantel Bars
 .MantelBar {
 	background: @primaryBG;
 	> div {
 		max-width: 1170px;
 		margin: 0 auto;
-		padding: .125em;
+		padding: .125em 0;
 	}
 	h1, h2 {
 		margin: 0;
@@ -22,5 +28,28 @@
 	}
 	h2 {
 		float: right;
+	}
+}
+
+
+#MainContent {
+	max-width: 1170px;
+    margin: 1em auto;
+    padding: .625em;
+    border: 1px solid gray;
+    min-height: 300px;
+    border-radius: .125em;
+    background: whitesmoke;
+}
+
+
+.list--unstyled {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	> li {
+		margin: .125em 0 0;
+		padding: 0 0 .125em;
+		line-height: 1;
 	}
 }

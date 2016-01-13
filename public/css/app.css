@@ -343,13 +343,17 @@ table {
   display: block;
   clear: both;
 }
+html > *,
+body > * {
+  box-sizing: border-box;
+}
 .MantelBar {
   background: #5bc0de;
 }
 .MantelBar > div {
   max-width: 1170px;
   margin: 0 auto;
-  padding: .125em;
+  padding: .125em 0;
 }
 .MantelBar h1,
 .MantelBar h2 {
@@ -364,4 +368,23 @@ table {
 }
 .MantelBar h2 {
   float: right;
+}
+#MainContent {
+  max-width: 1170px;
+  margin: 1em auto;
+  padding: .625em;
+  border: 1px solid gray;
+  min-height: 300px;
+  border-radius: .125em;
+  background: whitesmoke;
+}
+.list--unstyled {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list--unstyled > li {
+  margin: .125em 0 0;
+  padding: 0 0 .125em;
+  line-height: 1;
 }
