@@ -343,6 +343,16 @@ table {
   display: block;
   clear: both;
 }
+button {
+  border: 1px solid #b5b5b5;
+  background: whitesmoke;
+  border-radius: .125em;
+  font-family: 'Helvetica', sans-serif;
+  font-size: .625em;
+  line-height: 1;
+  margin: 0;
+  padding: .125em .375em;
+}
 html > *,
 body > * {
   box-sizing: border-box;
