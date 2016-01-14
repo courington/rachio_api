@@ -1,6 +1,7 @@
 const $ = require('jquery')
 const Backbone = require('backbone')
 const _ = require('lodash')
+const moment = require('moment')
 
 
 // oauth token
@@ -65,47 +66,119 @@ const BaseView = Backbone.View.extend({
 // List Widget
 const ListWidget = Backbone.View.extend({
 	events: {
-		'click [data-zone]': 'setZoneState'
+		'click [data-zone]': 'startZone',
+		'click [data-device]': 'startZones',
 	},
 
-	setZoneState: function(e) {
+	startZones: function(e) {
 		e.preventDefault
-		let id = e.currentTarget.dataset.zone
-		console.warn(id)
+		
+		let self = this
+		let deviceID = e.currentTarget.dataset.device
+		let defaultRuntime = 60
+		
+		// TODO: input type=number value is being sent as a string, forcing to Number type, code-smell
+		let duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime
+
+		// extend our oauth header with callbacks
+		let options = _.extend(headers, {
+			success: function(model, response, options) {
+				console.warn(`Device ${deviceID} zones running!`)
+			},
+			error: function(model, response, options) {
+				console.warn(`Error running Device ${deviceID} zones!`)
+			}
+		})
+
+		this.zonesModel.map(function(zone) {
+			zone.set({duration: duration, sortOrder: zone.get('zoneNumber')})
+		})
+
+		// TODO: this is breaking, need to re-send model rather than create a new model
+		// -- this needs to be done with the childModels.Zones collection but the data
+		// -- needs to be massaged to match the public api expectations
+		let model = new BaseModel({
+			url: 'https://api.rach.io/1/public/zone/start_multiple',
+			zones: this.zonesModel.toJSON()
+		})
+
+		Backbone.sync('update', model, options)
+	},
+
+	// start a single zone
+	startZone: function(e) {
+		e.preventDefault
+		let zoneID = e.currentTarget.dataset.zone
+		let zone = this.zonesModel.get(zoneID)
+		let defaultRuntime = 60
+		// TODO: input type=number value is being sent as a string, forcing to Number type, code-smell
+		let duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime
+
+		// extend our oauth header with callbacks
+		let options = _.extend(headers, {
+			success: function(model, response, options) {
+				console.warn(`Zone ${zoneID} is running!`)
+			},
+			error: function(model, response, options) {
+				console.warn(`Error running ${zoneID}!`)
+			}
+		})
+
+		// reset the zone model url to conform to api call .../zone/start
+		// TODO: why does api not follow convention of /devices/:device_id/zones/:zone_id/start?duration=:duration
+		zone.urlStart()
+		
+		zone.save({duration: duration}, options)
 	},
 
 	initialize: function(options) {
 		options = options || {}
-		this.model = {}
-		_.extend(this.model, {length: options.model.length, items: options.model})
+		if(options.zonesModel) {
+			this.zonesModel = options.zonesModel
+		}
+
 		this.render()
 	},
 
 	render: function() {
-		let template = _.template(`<ul><% _.each(items, function(item) { %>
+		let data = {
+			items: this.model.toJSON()
+		}
+		let template = _.template(`<ul class="list--unstyled"><% _.each(items, function(item) { %>
 			<li>
-				<h3><%= item.name %></h3>
-				<div data-deviceID="<%= item.id %>">
-					<ul>
-					<% _.each(item.zones, function(zone) { %>
-						<li>
-							<button type="button" data-zone="<%= zone.id %>"><%= zone.name %></button>
-						</li>
+				<strong data-device="<%= item.id %>"><%= item.name %></strong>
+				<form class="input-group">
+					<input type="number" name="duration"/>
+					<button type="button" data-device="<%= item.id %>">Run All Zones!</button>
+				</form>
+				<% if(item.zones){ %>
+					<dl>
+					<dt>Device Zones:</dt>
+					<% _.each(_.sortBy(item.zones, 'zoneNumber'), function(zone) { %>
+						<dd>
+							<div><%= zone.name %></div>
+							<form class="input-group">
+								<input type="number" name="duration" placeholder="<%= zone.runtime %>"/>
+								<button type="button" data-zone="<%= zone.id %>">Run Zone!</button>
+							</form>
+						</dd>
 					<% }) %>
-					</ul>
-				</div>
+					</dl>
+				<% } %>
 			</li>
 			<% }) %></ul>`
 		)
-		this.$el.html(template(this.model))
+		this.$el.html(template(data))
 		return this.$el
 	}
 })
 
+
 // Main Controller
 const BaseController = BaseView.extend({
+	
+	// child models for user, devices, zones
 	childModels: {},
-
 
 	// set the user model based on the returned id from /user/info
 	setUserModel: function() {
@@ -120,22 +193,18 @@ const BaseController = BaseView.extend({
 
 	// set the devices collection based off the devices attr retrieved off the user obj
 	setDevicesCollection: function() {
+		let self = this
 		let deviceURL = 'https://api.rach.io/1/public/device'
-		let zoneURL = 'https://api.rach.io/1/public/zone'
 		let DeviceModel = Backbone.Model.extend({
 			urlRoot: deviceURL,
 		})
-		let ZoneModel = Backbone.Model.extend({
-			urlRoot: zoneURL
-		})
-		let ZonesCollection = BaseCollection.extend({
-			model: ZoneModel
-		})
 		let DevicesCollection = BaseCollection.extend({
 			initialize: function(models, options) {
-				// map models to create a collection of zones fo each
+				// map each device model to create associated zones collection
 				models.map(function(model) {
-					model.zones = new ZonesCollection(model.zones)
+					// pass an object literal containing the device id and the zones to
+					// create a standalone zones collection for ease in finding in updating individual zones
+					self.setZonesCollection(_.extend({deviceID: model.id}, {zones: model.zones}))
 				})
 			},
 			model: DeviceModel
@@ -144,6 +213,35 @@ const BaseController = BaseView.extend({
 			this.childModels.Devices = new DevicesCollection(this.childModels.User.get('devices'))
 			this.renderDevices()
 		}, this)
+	},
+
+
+	// set devices' zones collection
+	// TODO: test against multiple devices for a single user
+	setZonesCollection: function(options) {
+		options = options || {}
+		let zones = [] // empty array we'll be populating with our massaged zones
+		let zoneURL = 'https://api.rach.io/1/public/zone'
+		let ZoneModel = Backbone.Model.extend({
+			urlRoot: zoneURL,
+			urlStart: function() {
+				return this.url = 'https://api.rach.io/1/public/zone/start'
+			}
+		})
+		let ZonesCollection = BaseCollection.extend({
+			model: ZoneModel,
+			comparator: 'zoneNumber'
+		})
+
+		// check that the deviceID && zones attributes are set and zones is an array
+		// TODO: double check code smell, maybe try...catch
+		if(options.deviceID && options.zones && options.zones.__proto__.constructor === Array) {
+			options.zones.map(function(zone) {
+				zones.push(_.extend(zone, {deviceID: options.deviceID}))
+			})
+		}
+
+		this.childModels.Zones = new ZonesCollection(zones)
 	},
 
 
@@ -159,15 +257,10 @@ const BaseController = BaseView.extend({
 
 	// render a list of all devices
 	renderDevices: function() {
-		let model = this.childModels.Devices.toJSON()
-		model.map(function(model) {
-			// put the zones in ascending order every time
-			let sortedZones = _.sortBy(model.zones.toJSON(), 'zoneNumber')
-			model.zones = sortedZones
-		})
 		let devicesListWidget = new ListWidget({
 			el: $('#DevicesList'),
-			model: model
+			model: this.childModels.Devices,
+			zonesModel: this.childModels.Zones
 		})
 	}
 })
