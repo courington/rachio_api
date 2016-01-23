@@ -10,7 +10,7 @@ module.exports = Backbone.View.extend({
 		this.template = _.template(options.template)
 		
 		// passing headers down from controller
-		let headers = options.headers || null
+		this.headers = options.headers || null
 
 		this.listenTo(this.model, 'request', function() {
 			this.renderLoader();
@@ -21,7 +21,7 @@ module.exports = Backbone.View.extend({
 		}, this)
 
 		if(!this.model.length) {
-			this.model.fetch(headers)
+			this.model.fetch(this.headers)
 		} else {
 			this.render(this.model.toJSON())
 		}

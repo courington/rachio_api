@@ -9,57 +9,79 @@ module.exports = Backbone.View.extend({
 		'click [data-device]': 'startZones',
 	},
 
+	// standardize the ajax call
+	sendStart: function sendStart(url, data, el) {
+
+		console.warn(el);
+
+		$.ajax({
+			url: url,
+			type: 'PUT',
+			data: data,
+			dataType: 'json',
+			statusCode: {
+		    	204: function() {
+		    		console.warn('success!');
+		    	}
+		    },
+			beforeSend: function(xhr) {
+				$(el).addClass('working');
+				xhr.setRequestHeader('Authorization', 'Bearer c3667b81-92a6-4913-b83c-64cc713cbc1e');
+			}
+		})
+		.done(function(data, status) {
+			console.warn(status);
+			$(el).removeClass('working');
+		})
+		.fail(function(xhr, status, err) {
+			console.error(url, status, err.toString());
+		});
+	},
+
+	// start all zones
 	startZones: function startZones(e) {
 		e.preventDefault
 		
-		let self = this
-		let deviceID = e.currentTarget.dataset.device
-		let defaultRuntime = 60
-		
-		// TODO: input type=number value is being sent as a string, forcing to Number type, code-smell
-		let duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime
+		let self = this,
+			data = {"zones": []},
+			deviceID = e.currentTarget.dataset.device,
+			defaultRuntime = 60,
+			// TODO: api only accepts a number, input value type set to number
+			duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime;
 
-		// extend our oauth header with callbacks
-		let options = _.extend(headers, {
-			success: function(model, response, options) {
-				console.warn(`Device ${deviceID} zones running!`)
-			},
-			error: function(model, response, options) {
-				console.warn(`Error running Device ${deviceID} zones!`)
-			}
+		this.model.get(deviceID).toJSON().zones.map(function(zone) {
+			data.zones.push({
+				"id": zone.id,
+				"duration": zone.lastWateredDuration || zone.runTime, // use last watered duration or use the set runtime of the zone
+				"sortOrder": zone.zoneNumber
+			})
 		})
 
-		Backbone.sync('update', this.zonesCollection, options)
+		this.sendStart(
+			'https://api.rach.io/1/public/zone/start_multiple',
+			JSON.stringify(data),
+			e.currentTarget
+		);
 	},
 
 	// start a single zone
 	startZone: function startZone(e) {
 		e.preventDefault
-		let zoneID = e.currentTarget.dataset.zone
-		console.warn(this.zonesModel)
-		// let zone = this.zonesModel.get(zoneID)
-		let defaultRuntime = 60
-		// TODO: input type=number value is being sent as a string, forcing to Number type, code-smell
-		let duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime
+		let zoneID = e.currentTarget.dataset.zone,
+			zone = _.findWhere(this.zonesModel.attributes, {id: zoneID}),
+			defaultRuntime = 60,
+			// TODO: input type=number value is being sent as a string, forcing to Number type, code-smell
+			duration = e.currentTarget.previousElementSibling.value ? Number(e.currentTarget.previousElementSibling.value) : defaultRuntime;
 
-		// extend our oauth header with callbacks
-		let options = _.extend(headers, {
-			success: function(model, response, options) {
-				console.warn(`Zone ${zoneID} is running!`)
-			},
-			error: function(model, response, options) {
-				console.warn(`Error running ${zoneID}!`)
-			}
-		})
-
-		// reset the zone model url to conform to api call .../zone/start
-		// TODO: why does api not follow convention of /devices/:device_id/zones/:zone_id/start?duration=:duration
-		// zone.urlStartOne()
-		// zone.save(zone, options)
+		this.sendStart(
+			'https://api.rach.io/1/public/zone/start',
+			JSON.stringify({ "id" : zoneID, "duration" : duration })
+		);
 	},
 
 	initialize: function initialize(options) {
 		options = options || {}
+		this.headers = options.headers || null
 		if(options.zonesModel) {
 			this.zonesModel = options.zonesModel
 		}

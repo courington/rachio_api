@@ -1,7 +1,6 @@
 const $ = require('jquery')
-const Backbone = require('backbone')
 const _ = require('lodash')
-const moment = require('moment')
+const Backbone = require('backbone')
 const BaseView = require('./src/js/v.BaseView')
 const BaseModel = require('./src/js/m.BaseModel')
 const ListWidget = require('./src/js/v.ListWidget')
@@ -109,7 +108,7 @@ const BaseController = BaseView.extend({
 			el: $('#MainMantel').find('.greeting'),
 			model: this.childModels.User,
 			template: `Hello, <%= fullName %>`,
-			headers: headers
+			headers: this.headers
 		})
 	},
 
@@ -119,7 +118,8 @@ const BaseController = BaseView.extend({
 		let devicesListWidget = new ListWidget({
 			el: $('#DevicesList'),
 			model: this.childModels.Devices,
-			zonesModel: this.childModels.Zones
+			zonesModel: this.childModels.Zones,
+			headers: this.headers
 		})
 	}
 })
